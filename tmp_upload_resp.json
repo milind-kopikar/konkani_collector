@@ -1,0 +1,1 @@
+{"recording_id":1,"status":"warning","message":"Recording saved but failed validation","validation":{"valid":false,"errors":["Failed to read audio metadata: Failed to probe audio: Cannot find ffprobe"],"duration":null}}

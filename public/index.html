@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Konkani Audio Recorder</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎙️ Konkani Audio Recorder</h1>
+            <p>Help build an Amchi Konkani speech recognition system by recording your voice</p>
+        </header>
+
+        <main>
+            <section class="intro">
+                <h2>How it works:</h2>
+                <ol>
+                    <li>Choose a story from the list below</li>
+                    <li>Read sentences aloud in Konkani</li>
+                    <li>Record your voice using the browser</li>
+                    <li>Submit recordings to help train the AI model</li>
+                </ol>
+            </section>
+
+            <section class="stories-section">
+                <h2>Select a Story</h2>
+                <div id="loading" class="loading">Loading stories...</div>
+                <div id="error" class="error" style="display: none;"></div>
+                <div id="stories-list" class="stories-grid"></div>
+                                <details id="debug-stories" style="margin-top: 10px; display: none;">
+                                    <summary>Show API Response (debug)</summary>
+                                    <pre id="debug-stories-json"></pre>
+                                </details>
+            </section>
+
+            <section class="info">
+                <h3>Why contribute?</h3>
+                <p>
+                    Your voice recordings will be used to train an automatic speech recognition (ASR) 
+                    system for Konkani language. This technology can help preserve and promote our 
+                    language in the digital age.
+                </p>
+                <p>
+                    All recordings are voluntary and will be used only for research and education purposes.
+                </p>
+            </section>
+        </main>
+
+        <footer>
+            <p>Konkani Audio Collector | Built with ❤️ for language preservation</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        // Load and display stories
+        async function loadStories() {
+            try {
+                const response = await fetch('/api/stories');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                // Debugging output: print raw data to console
+                console.debug('API /api/stories returned:', data);
+                                const stories = data.stories || [];
+                                // Fill debug area for troubleshooting
+                                const dbgEl = document.getElementById('debug-stories');
+                                if (dbgEl) {
+                                    const dbgJson = document.getElementById('debug-stories-json');
+                                    if (dbgJson) dbgJson.textContent = JSON.stringify(data, null, 2);
+                                    dbgEl.style.display = 'block';
+                                }
+                
+                const loadingEl = document.getElementById('loading');
+                const errorEl = document.getElementById('error');
+                const storiesListEl = document.getElementById('stories-list');
+                
+                loadingEl.style.display = 'none';
+                
+                if (!Array.isArray(stories) || stories.length === 0) {
+                    errorEl.textContent = 'No stories available yet. Check back soon!';
+                    errorEl.style.display = 'block';
+                    return;
+                }
+                
+                // Render story cards
+                stories.forEach(story => {
+                    const card = document.createElement('div');
+                    card.className = 'story-card';
+                    
+                    const completionPercent = Number(story.completion_pct) || 0;
+                    const totalRecordings = Number(story.total_recordings) || 0;
+                    const totalSentences = Number(story.total_sentences) || 0;
+                    
+                    card.innerHTML = `
+                        <h3>${escapeHtml(story.title)}</h3>
+                        <div class="story-stats">
+                            <p><strong>Sentences:</strong> ${totalSentences}</p>
+                            <p><strong>Recordings:</strong> ${totalRecordings}</p>
+                            <p><strong>Completion:</strong> ${completionPercent.toFixed(1)}%</p>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${completionPercent}%"></div>
+                        </div>
+                        <button class="btn-primary" onclick="startRecording(${story.id})">
+                            Start Recording
+                        </button>
+                    `;
+                    
+                    storiesListEl.appendChild(card);
+                });
+                
+            } catch (error) {
+                console.error('Failed to load stories:', error);
+                document.getElementById('loading').style.display = 'none';
+                const errMsg = `Failed to load stories: ${error.message || error}`;
+                document.getElementById('error').textContent = errMsg;
+                document.getElementById('error').style.display = 'block';
+                // Keep console.debug for detailed inspection
+                if (error.response) {
+                    console.debug('Response status:', error.response.status);
+                    console.debug('Response text:', error.response.text);
+                }
+            }
+        }
+        
+        function startRecording(storyId) {
+            // Save story selection and navigate to recorder
+            sessionStorage.setItem('selectedStoryId', storyId);
+            window.location.href = 'recorder.html';
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Load stories on page load
+        loadStories();
+    </script>
+</body>
+</html>
