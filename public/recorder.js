@@ -8,6 +8,8 @@ class RecorderApp {
         this.storyId = null;
         this.userId = null;
         this.currentSentence = null;
+        this.allSentences = []; // Store all sentences for navigation
+        this.currentIndex = 0; // Current position in allSentences array
         this.mediaRecorder = null;
         this.audioChunks = [];
         this.recordedBlob = null;
@@ -18,6 +20,7 @@ class RecorderApp {
         
         this.initElements();
         this.initUserId();
+        this.displayUserEmail();
         this.loadStoryId();
     }
     
@@ -47,6 +50,8 @@ class RecorderApp {
         this.btnRerecord = document.getElementById('btn-rerecord');
         this.btnSubmit = document.getElementById('btn-submit');
         this.btnEnd = document.getElementById('btn-end');
+        this.btnPrevious = document.getElementById('btn-previous');
+        this.btnNext = document.getElementById('btn-next');
         
         // Visualizer
         this.visualizerCanvas = document.getElementById('visualizer');
@@ -59,15 +64,31 @@ class RecorderApp {
         this.btnRerecord.addEventListener('click', () => this.rerecord());
         this.btnSubmit.addEventListener('click', () => this.submitRecording());
         this.btnEnd.addEventListener('click', () => this.endSession());
+        this.btnPrevious.addEventListener('click', () => this.navigatePrevious());
+        this.btnNext.addEventListener('click', () => this.navigateNext());
         if (this.errorRetryBtn) this.errorRetryBtn.addEventListener('click', () => this.handleErrorRetry());
     }
     
     initUserId() {
-        // Get or create user session ID
-        this.userId = sessionStorage.getItem('userId');
+        // Get user email from session (set on home page)
+        this.userId = sessionStorage.getItem('userEmail');
+        
         if (!this.userId) {
-            this.userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            sessionStorage.setItem('userId', this.userId);
+            // Redirect to home page if no email found
+            alert('Please enter your email on the home page first.');
+            window.location.href = '/';
+            return;
+        }
+        
+        // Ensure email is lowercase
+        this.userId = this.userId.toLowerCase().trim();
+        sessionStorage.setItem('userEmail', this.userId);
+    }
+    
+    displayUserEmail() {
+        const emailDisplay = document.getElementById('user-email-recorder');
+        if (emailDisplay && this.userId) {
+            emailDisplay.textContent = `📧 ${this.userId}`;
         }
     }
     
@@ -78,33 +99,112 @@ class RecorderApp {
             return;
         }
         
-        this.loadNextSentence();
+        this.loadAllSentences();
     }
     
-    async loadNextSentence() {
+    async loadAllSentences() {
         try {
-            this.showStatus('Loading next sentence...', 'info');
+            this.showStatus('Loading sentences...', 'info');
             
-            const response = await fetch(`/api/sentences/${this.storyId}/next?userId=${encodeURIComponent(this.userId)}`);
+            const response = await fetch(`/api/sentences/${this.storyId}/all?userId=${encodeURIComponent(this.userId)}`);
             
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             
-            const data = await response.json();
+            this.allSentences = await response.json();
             
-            if (data.completed) {
-                this.showCompletion();
+            if (this.allSentences.length === 0) {
+                this.showError('No sentences found for this story.');
                 return;
             }
             
-            this.currentSentence = data;
-            this.displaySentence();
-            this.hideStatus();
+            // Start at first unrecorded sentence, or first sentence if all recorded
+            this.currentIndex = this.allSentences.findIndex(s => !s.has_recording);
+            if (this.currentIndex === -1) {
+                this.currentIndex = 0; // All recorded, start at beginning
+            }
+            
+            this.loadSentenceAtIndex(this.currentIndex);
             
         } catch (error) {
-            console.error('Failed to load sentence:', error);
-            this.showError('Failed to load sentence. Please try again.');
+            console.error('Failed to load sentences:', error);
+            this.showError('Failed to load sentences. Please try again.');
+        }
+    }
+    
+    loadSentenceAtIndex(index) {
+        if (index < 0 || index >= this.allSentences.length) {
+            return;
+        }
+        
+        this.currentIndex = index;
+        const sentence = this.allSentences[index];
+        
+        // Fetch story title (we'll get it from the first API call)
+        fetch(`/api/stories`)
+            .then(res => res.json())
+            .then(stories => {
+                const story = stories.find(s => s.id === parseInt(this.storyId));
+                this.currentSentence = {
+                    sentence_id: sentence.id,
+                    text_devanagari: sentence.text_devanagari,
+                    text_iast: sentence.text_iast,
+                    story_title: story ? story.title : 'Recording',
+                    order: sentence.order_in_story,
+                    total: this.allSentences.length,
+                    remaining: this.allSentences.filter(s => !s.has_recording).length,
+                    has_recording: sentence.has_recording,
+                    recording_id: sentence.recording_id
+                };
+                this.displaySentence();
+            })
+            .catch(() => {
+                this.currentSentence = {
+                    sentence_id: sentence.id,
+                    text_devanagari: sentence.text_devanagari,
+                    text_iast: sentence.text_iast,
+                    story_title: 'Recording',
+                    order: sentence.order_in_story,
+                    total: this.allSentences.length,
+                    remaining: this.allSentences.filter(s => !s.has_recording).length,
+                    has_recording: sentence.has_recording,
+                    recording_id: sentence.recording_id
+                };
+                this.displaySentence();
+            });
+    }
+    
+    navigatePrevious() {
+        if (this.currentIndex > 0) {
+            this.loadSentenceAtIndex(this.currentIndex - 1);
+        }
+    }
+    
+    navigateNext() {
+        if (this.currentIndex < this.allSentences.length - 1) {
+            this.loadSentenceAtIndex(this.currentIndex + 1);
+        }
+    }
+    
+    async loadNextSentence() {
+        // Legacy method - now just navigate to next unrecorded
+        const nextUnrecorded = this.allSentences.findIndex((s, idx) => idx > this.currentIndex && !s.has_recording);
+        if (nextUnrecorded !== -1) {
+            this.loadSentenceAtIndex(nextUnrecorded);
+        } else {
+            // Check if all done
+            if (this.allSentences.every(s => s.has_recording)) {
+                this.showCompletion();
+            } else {
+                // Loop back to first unrecorded
+                const firstUnrecorded = this.allSentences.findIndex(s => !s.has_recording);
+                if (firstUnrecorded !== -1) {
+                    this.loadSentenceAtIndex(firstUnrecorded);
+                } else {
+                    this.showCompletion();
+                }
+            }
         }
     }
     
@@ -123,8 +223,29 @@ class RecorderApp {
         this.progressText.textContent = `Sentence ${currentNum} of ${total}`;
         this.remainingText.textContent = `${remaining} remaining`;
         
+        // Update navigation button states
+        this.btnPrevious.disabled = this.currentIndex === 0;
+        this.btnNext.disabled = this.currentIndex === this.allSentences.length - 1;
+        
         // Reset recording state
         this.resetRecordingState();
+        
+        // Set initial status message based on whether sentence has recording
+        if (this.currentSentence.has_recording) {
+            this.showStatus('Recording saved successfully!', 'success');
+        } else {
+            this.showStatus('To be recorded', 'info');
+        }
+        
+        // If sentence already has recording, enable play button (highlighted)
+        if (this.currentSentence.has_recording) {
+            this.btnPlay.disabled = false;
+            this.btnPlay.style.opacity = '1';
+            this.btnPlay.title = 'Play existing recording';
+        } else {
+            this.btnPlay.style.opacity = '0.5';
+            this.btnPlay.title = 'No recording yet';
+        }
     }
     
     resetRecordingState() {
@@ -142,6 +263,16 @@ class RecorderApp {
         this.btnRecord.classList.remove('recording');
         
         this.clearVisualizer();
+        
+        // Update Record button text based on whether sentence has existing recording
+        if (this.currentSentence && this.currentSentence.has_recording) {
+            this.btnRecord.textContent = '🎙️ Re-record';
+            this.btnPlay.disabled = false;
+            this.btnPlay.style.opacity = '1';
+        } else {
+            this.btnRecord.textContent = '🎙️ Record';
+            this.btnPlay.style.opacity = '0.5';
+        }
     }
     
     async startRecording() {
@@ -239,32 +370,94 @@ class RecorderApp {
     onRecordingComplete() {
         console.debug('onRecordingComplete: audioChunks length=', this.audioChunks.length, 'blob size=', this.recordedBlob ? this.recordedBlob.size : 0);
         this.btnPlay.disabled = false;
+        this.btnPlay.style.opacity = '1'; // Highlight play button
         this.btnRerecord.disabled = false;
         this.btnSubmit.disabled = false;
+        
+        // Update Record button to say Re-record and enable it
+        this.btnRecord.disabled = false;
+        this.btnRecord.textContent = '🎙️ Re-record';
         
         this.showStatus('Recording complete! You can play it back, re-record, or submit.', 'success');
     }
     
-    playRecording() {
-        if (!this.recordedBlob) return;
+    async playRecording() {
+        let audioUrl;
         
-        const audioUrl = URL.createObjectURL(this.recordedBlob);
-        const audio = new Audio(audioUrl);
+        // If there's a newly recorded blob, play that
+        if (this.recordedBlob) {
+            console.log('Playing newly recorded blob, size:', this.recordedBlob.size);
+            audioUrl = URL.createObjectURL(this.recordedBlob);
+        } 
+        // Otherwise, if sentence has existing recording, fetch and play it
+        else if (this.currentSentence.has_recording && this.currentSentence.recording_id) {
+            try {
+                this.btnPlay.textContent = '⏳ Loading...';
+                this.btnPlay.disabled = true;
+                
+                console.log('Fetching recording:', this.currentSentence.recording_id);
+                const response = await fetch(`/api/recordings/${this.currentSentence.recording_id}/audio`);
+                if (!response.ok) {
+                    this.showStatus('Failed to load existing recording', 'error');
+                    this.btnPlay.textContent = '▶️ Play';
+                    this.btnPlay.disabled = false;
+                    return;
+                }
+                const blob = await response.blob();
+                console.log('Received blob, size:', blob.size, 'type:', blob.type);
+                audioUrl = URL.createObjectURL(blob);
+            } catch (error) {
+                console.error('Error loading existing recording:', error);
+                this.showStatus('Failed to load existing recording', 'error');
+                this.btnPlay.textContent = '▶️ Play';
+                this.btnPlay.disabled = false;
+                return;
+            }
+        } else {
+            return;
+        }
         
-        audio.onended = () => {
-            URL.revokeObjectURL(audioUrl);
-            this.btnPlay.textContent = '▶️ Play';
-        };
+        const audio = new Audio();
+        audio.preload = 'auto';
+        audio.src = audioUrl;
+        
+        console.log('Audio element created, src:', audioUrl);
         
         this.btnPlay.textContent = '⏸️ Playing...';
         this.btnPlay.disabled = true;
         
-        audio.play();
+        // Use loadeddata instead of canplaythrough for more reliable playback
+        audio.addEventListener('loadeddata', () => {
+            console.log('Audio loaded, duration:', audio.duration, 'seconds');
+            audio.play().catch(err => {
+                console.error('Play error:', err);
+                this.btnPlay.textContent = '▶️ Play';
+                this.btnPlay.disabled = false;
+                URL.revokeObjectURL(audioUrl);
+            });
+        }, { once: true });
         
-        audio.onended = () => {
+        audio.addEventListener('ended', () => {
+            console.log('Audio playback ended');
             this.btnPlay.textContent = '▶️ Play';
             this.btnPlay.disabled = false;
-        };
+            URL.revokeObjectURL(audioUrl);
+        });
+        
+        audio.addEventListener('error', (e) => {
+            console.error('Audio error:', e, 'Error code:', audio.error ? audio.error.code : 'unknown');
+            this.btnPlay.textContent = '▶️ Play';
+            this.btnPlay.disabled = false;
+            URL.revokeObjectURL(audioUrl);
+            this.showStatus('Error playing audio', 'error');
+        });
+        
+        audio.addEventListener('pause', () => {
+            console.log('Audio paused at:', audio.currentTime, '/', audio.duration);
+        });
+        
+        // Start loading the audio
+        audio.load();
     }
     
     rerecord() {
@@ -282,6 +475,18 @@ class RecorderApp {
             this.btnSubmit.textContent = '⏳ Uploading...';
             console.debug('submitRecording: preparing formData');
             this.showStatus('Uploading recording...', 'info');
+            
+            // If re-recording an existing recording, delete the old one first
+            if (this.currentSentence.has_recording && this.currentSentence.recording_id) {
+                console.debug('Deleting old recording:', this.currentSentence.recording_id);
+                try {
+                    await fetch(`/api/recordings/${this.currentSentence.recording_id}`, {
+                        method: 'DELETE'
+                    });
+                } catch (err) {
+                    console.warn('Failed to delete old recording, continuing anyway:', err);
+                }
+            }
             
             // Create form data
             const formData = new FormData();
@@ -312,6 +517,10 @@ class RecorderApp {
             } else {
                 this.showStatus('✓ Recording saved successfully!', 'success');
             }
+            
+            // Update local state - mark sentence as recorded
+            this.allSentences[this.currentIndex].has_recording = true;
+            this.allSentences[this.currentIndex].recording_id = result.recording_id;
             
             // Wait a moment, then load next sentence
             setTimeout(() => {

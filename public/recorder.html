@@ -205,6 +205,9 @@
         <header>
             <h1>🎙️ Record Sentences</h1>
             <p id="story-title">Loading...</p>
+            <div class="user-info">
+                <span id="user-email-recorder"></span>
+            </div>
         </header>
 
         <main>
@@ -244,7 +247,7 @@
                     <button id="btn-play" class="btn btn-play" disabled>
                         ▶️ Play
                     </button>
-                    <button id="btn-rerecord" class="btn btn-secondary" disabled>
+                    <button id="btn-rerecord" class="btn btn-secondary" disabled style="display: none;">
                         🔄 Re-record
                     </button>
                     <button id="btn-submit" class="btn btn-submit" disabled>
@@ -253,6 +256,15 @@
                 </div>
 
                 <div id="status-message" style="display: none;"></div>
+
+                <div class="recording-controls" style="margin-top: 30px;">
+                    <button id="btn-previous" class="btn btn-secondary">
+                        ← Previous
+                    </button>
+                    <button id="btn-next" class="btn btn-secondary">
+                        Next →
+                    </button>
+                </div>
 
                 <div style="text-align: center; margin-top: 20px;">
                     <button id="btn-end" class="btn btn-secondary">

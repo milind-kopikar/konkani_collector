@@ -171,9 +171,17 @@ async function exportManifests() {
         const copyMode = options.copyAudio;
         console.log(`  Mode: ${copyMode ? 'COPY' : 'SYMLINK'}`);
 
+        const uploadDir = process.env.UPLOAD_DIR || './uploads';
+        
         let transferred = 0;
         for (const recording of recordings) {
-            const sourcePath = path.resolve(recording.audio_filepath);
+            // Handle both absolute and relative paths
+            let sourcePath = recording.audio_filepath;
+            if (!path.isAbsolute(sourcePath)) {
+                // Relative path - resolve from uploads directory
+                sourcePath = path.resolve(uploadDir, sourcePath);
+            }
+            
             const destPath = path.join(audioDir, path.basename(recording.audio_filepath));
             
             await transferAudioFile(sourcePath, destPath, copyMode);

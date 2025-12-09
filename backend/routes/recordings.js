@@ -41,7 +41,13 @@ router.post('/', upload.single('audio'), validateRecordingUpload, async (req, re
     console.log('POST /api/recordings received');
     console.log('File info:', req.file && { originalname: req.file.originalname, mimetype: req.file.mimetype, size: req.file.size });
     console.log('Body:', { sentence_id: req.body.sentence_id, user_id: req.body.user_id });
-    const { sentence_id, user_id } = req.body;
+    
+    const { sentence_id } = req.body;
+    let { user_id } = req.body;
+    
+    // Normalize user_id to lowercase for consistency
+    user_id = user_id.toLowerCase().trim();
+    
     const tempFilePath = req.file.path;
 
     try {
@@ -98,23 +104,9 @@ router.post('/', upload.single('audio'), validateRecordingUpload, async (req, re
             }
         }
 
-        // 3. Trim silence using ffmpeg (if available) and then validate audio
-        const { trimSilence } = require('../utils/audioConverter');
+        // 3. Validate audio (no silence trimming to preserve full recordings)
         let validation;
         try {
-            if (ffmpegAvailable) {
-                try {
-                    const trimmedPath = path.join('/tmp', `${uuidv4()}-trimmed.wav`);
-                    await trimSilence(wavPath, trimmedPath);
-                    // if trimming created a new file, replace wavPath
-                    if (trimmedPath && trimmedPath !== wavPath) {
-                        try { await fs.unlink(wavPath).catch(() => {}); } catch {}
-                        wavPath = trimmedPath;
-                    }
-                } catch (te) {
-                    console.warn('trimSilence failed; proceeding with original audio:', te.message);
-                }
-            }
             validation = await validateAudio(wavPath, sentence.text_devanagari);
             console.log('Post-validation: valid=', validation.valid, 'errors=', validation.errors, 'checks=', validation.checks);
             // If validation returned with errors, respond with 422 and do not save
@@ -191,6 +183,141 @@ router.post('/', upload.single('audio'), validateRecordingUpload, async (req, re
         } catch {}
         
         next(error);
+    }
+});
+
+// GET /api/recordings - List all recordings with details for review
+router.get('/', async (req, res) => {
+    try {
+        const result = await query(
+            `SELECT 
+                r.id,
+                r.audio_filepath,
+                r.duration_seconds as duration,
+                r.needs_rerecording,
+                r.created_at,
+                r.user_id,
+                s.id as sentence_id,
+                s.text_devanagari as sentence_text,
+                st.title as story_title
+             FROM recordings r
+             JOIN sentences s ON r.sentence_id = s.id
+             JOIN stories st ON s.story_id = st.id
+             ORDER BY r.created_at DESC`
+        );
+
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching recordings:', error);
+        res.status(500).json({ error: 'Failed to fetch recordings' });
+    }
+});
+
+// PATCH /api/recordings/:id - Update needs_rerecording flag
+router.patch('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { needs_rerecording } = req.body;
+
+        if (typeof needs_rerecording !== 'boolean') {
+            return res.status(400).json({ error: 'needs_rerecording must be a boolean' });
+        }
+
+        const result = await query(
+            `UPDATE recordings 
+             SET needs_rerecording = $1,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = $2
+             RETURNING *`,
+            [needs_rerecording, id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Recording not found' });
+        }
+
+        res.json({
+            message: 'Recording updated successfully',
+            recording: result.rows[0]
+        });
+
+    } catch (error) {
+        console.error('Error updating recording:', error);
+        res.status(500).json({ error: 'Failed to update recording' });
+    }
+});
+
+// GET /api/recordings/:id/audio - Get audio file for a recording
+router.get('/:id/audio', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const result = await query(
+            'SELECT audio_filepath FROM recordings WHERE id = $1',
+            [id]
+        );
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Recording not found' });
+        }
+        
+        const audioPath = path.join(__dirname, '../../uploads', result.rows[0].audio_filepath);
+        
+        if (!require('fs').existsSync(audioPath)) {
+            return res.status(404).json({ error: 'Audio file not found' });
+        }
+        
+        // Set proper headers for audio streaming
+        const stat = require('fs').statSync(audioPath);
+        res.set({
+            'Content-Type': 'audio/wav',
+            'Content-Length': stat.size,
+            'Accept-Ranges': 'bytes',
+            'Cache-Control': 'no-cache'
+        });
+        
+        res.sendFile(audioPath);
+        
+    } catch (error) {
+        console.error('Error fetching audio:', error);
+        res.status(500).json({ error: 'Failed to fetch audio' });
+    }
+});
+
+// DELETE /api/recordings/:id - Delete a recording (for re-recording)
+router.delete('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // Get the audio filepath before deleting
+        const result = await query(
+            'SELECT audio_filepath FROM recordings WHERE id = $1',
+            [id]
+        );
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Recording not found' });
+        }
+        
+        const audioPath = path.join(__dirname, '../../uploads', result.rows[0].audio_filepath);
+        
+        // Delete from database
+        await query('DELETE FROM recordings WHERE id = $1', [id]);
+        
+        // Try to delete the audio file (don't fail if it doesn't exist)
+        try {
+            if (require('fs').existsSync(audioPath)) {
+                require('fs').unlinkSync(audioPath);
+            }
+        } catch (err) {
+            console.warn('Failed to delete audio file:', err);
+        }
+        
+        res.json({ message: 'Recording deleted successfully' });
+        
+    } catch (error) {
+        console.error('Error deleting recording:', error);
+        res.status(500).json({ error: 'Failed to delete recording' });
     }
 });
 

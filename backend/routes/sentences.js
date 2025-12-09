@@ -12,11 +12,14 @@ const { queryOne } = require('../db');
 router.get('/:storyId/next', async (req, res, next) => {
     try {
         const { storyId } = req.params;
-        const { userId } = req.query;
+        let { userId } = req.query;
 
         if (!userId) {
             return res.status(400).json({ error: 'userId query parameter required' });
         }
+
+        // Normalize userId to lowercase for consistency
+        userId = userId.toLowerCase().trim();
 
         // Get next sentence this user hasn't recorded yet
         const sentence = await queryOne(`
@@ -78,6 +81,40 @@ router.get('/:storyId/next', async (req, res, next) => {
             remaining: Number(sentence.total_remaining || 0),
             remaining_before: Number(sentence.remaining_before || 0),
         });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// GET /api/sentences/:storyId/all?userId=xyz
+// Returns all sentences for a story with recording status for this user
+router.get('/:storyId/all', async (req, res, next) => {
+    try {
+        const { storyId } = req.params;
+        let { userId } = req.query;
+
+        if (!userId) {
+            return res.status(400).json({ error: 'userId query parameter required' });
+        }
+
+        userId = userId.toLowerCase().trim();
+
+        const { query } = require('../db');
+        const result = await query(`
+            SELECT
+                s.id,
+                s.order_in_story,
+                s.text_devanagari,
+                s.text_iast,
+                CASE WHEN r.id IS NOT NULL THEN true ELSE false END as has_recording,
+                r.id as recording_id
+            FROM sentences s
+            LEFT JOIN recordings r ON r.sentence_id = s.id AND r.user_id = $2
+            WHERE s.story_id = $1
+            ORDER BY s.order_in_story ASC
+        `, [storyId, userId]);
+
+        res.json(result.rows);
     } catch (error) {
         next(error);
     }

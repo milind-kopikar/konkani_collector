@@ -21,10 +21,14 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Serve static frontend files
 app.use(express.static(path.join(__dirname, '../public')));
 
+// Serve uploaded audio files
+app.use('/recordings', express.static(path.join(__dirname, '../uploads/recordings')));
+
 // API Routes
 app.use('/api/stories', require('./routes/stories'));
 app.use('/api/sentences', require('./routes/sentences'));
 app.use('/api/recordings', require('./routes/recordings'));
+app.use('/api/users', require('./routes/users'));
 app.use('/api/programmatic', require('./routes/programmatic'));
 
 // Test endpoints (disable in production)
