@@ -18,6 +18,7 @@ program
     .requiredOption('-f, --file <path>', 'Path to story .txt file')
     .requiredOption('-t, --title <title>', 'Story title')
     .option('-l, --language <lang>', 'Language', 'konkani')
+    .option('-r, --replace', 'Replace existing story with same source_file or title (deletes existing story and related sentences/recordings)')
     .parse();
 
 const options = program.opts();
@@ -117,7 +118,21 @@ async function importStory() {
             throw new Error('No sentences found in file');
         }
 
-        // 3. Insert story
+        // 3. If replace was requested, delete any existing story with the same source_file or title
+        if (options.replace) {
+            console.log('⚠️ Replace flag detected — searching for existing stories to delete');
+            const existingByFile = await queryOne('SELECT id, title, source_file FROM stories WHERE source_file = $1', [path.basename(filePath)]);
+            const existingByTitle = await queryOne('SELECT id, title, source_file FROM stories WHERE title = $1', [options.title]);
+            const toDelete = existingByFile || (existingByTitle && existingByTitle.source_file !== path.basename(filePath) ? existingByTitle : null);
+            if (toDelete) {
+                let delId = toDelete.id;
+                console.log(`Deleting existing story entry (id=${delId}) to replace it`);
+                await query('DELETE FROM stories WHERE id = $1', [delId]);
+                console.log('✓ Existing story (and its sentences/recordings) deleted');
+            }
+        }
+
+        // 4. Insert story
         console.log(`Creating story: "${options.title}"`);
         
         const story = await queryOne(
@@ -129,7 +144,7 @@ async function importStory() {
 
         console.log(`✓ Story created with ID: ${story.id}`);
 
-        // 4. Insert sentences
+        // 5. Insert sentences
         console.log('Importing sentences...');
         
         for (let i = 0; i < sentences.length; i++) {
