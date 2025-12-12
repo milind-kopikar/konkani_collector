@@ -194,7 +194,7 @@ router.get('/', async (req, res) => {
                 r.id,
                 r.audio_filepath,
                 r.duration_seconds as duration,
-                r.needs_rerecording,
+                r.status,
                 r.created_at,
                 r.user_id,
                 s.id as sentence_id,
@@ -213,23 +213,23 @@ router.get('/', async (req, res) => {
     }
 });
 
-// PATCH /api/recordings/:id - Update needs_rerecording flag
+// PATCH /api/recordings/:id - Update recording status
 router.patch('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { needs_rerecording } = req.body;
+        const { status } = req.body;
 
-        if (typeof needs_rerecording !== 'boolean') {
-            return res.status(400).json({ error: 'needs_rerecording must be a boolean' });
+        if (!['pending', 'approved', 'rejected'].includes(status)) {
+            return res.status(400).json({ error: 'status must be pending, approved, or rejected' });
         }
 
         const result = await query(
             `UPDATE recordings 
-             SET needs_rerecording = $1,
+             SET status = $1,
                  updated_at = CURRENT_TIMESTAMP
              WHERE id = $2
              RETURNING *`,
-            [needs_rerecording, id]
+            [status, id]
         );
 
         if (result.rows.length === 0) {

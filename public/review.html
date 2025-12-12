@@ -209,7 +209,7 @@
             <label for="filterStatus">Filter:</label>
             <select id="filterStatus">
                 <option value="all">All Recordings</option>
-                <option value="needs_rerecording">Needs Re-recording Only</option>
+                <option value="rejected">Rejected Only</option>
                 <option value="good">Good Quality Only</option>
             </select>
         </div>
@@ -272,22 +272,22 @@
 
         function updateStats() {
             const total = allRecordings.length;
-            const needsRerecording = allRecordings.filter(r => r.needs_rerecording).length;
-            const good = total - needsRerecording;
+            const rejected = allRecordings.filter(r => r.status === 'rejected').length;
+            const approved = allRecordings.filter(r => r.status === 'approved').length;
 
             document.getElementById('totalCount').textContent = total;
-            document.getElementById('needsRerecordingCount').textContent = needsRerecording;
-            document.getElementById('goodCount').textContent = good;
+            document.getElementById('needsRerecordingCount').textContent = rejected;
+            document.getElementById('goodCount').textContent = approved;
         }
 
         function renderRecordings() {
             const filterStatus = document.getElementById('filterStatus').value;
             
             let filteredRecordings = allRecordings;
-            if (filterStatus === 'needs_rerecording') {
-                filteredRecordings = allRecordings.filter(r => r.needs_rerecording);
+            if (filterStatus === 'rejected') {
+                filteredRecordings = allRecordings.filter(r => r.status === 'rejected');
             } else if (filterStatus === 'good') {
-                filteredRecordings = allRecordings.filter(r => !r.needs_rerecording);
+                filteredRecordings = allRecordings.filter(r => r.status === 'approved');
             }
 
             const tbody = document.getElementById('recordingsTableBody');
@@ -323,18 +323,19 @@
                     </td>
                     <td>
                         <select 
-                            class="flag-dropdown ${recording.needs_rerecording ? 'needs-rerecording' : 'good'}"
+                            class="flag-dropdown ${recording.status === 'rejected' ? 'needs-rerecording' : 'good'}"
                             data-recording-id="${recording.id}"
-                            onchange="updateFlag(${recording.id}, this.value === 'yes')">
-                            <option value="no" ${!recording.needs_rerecording ? 'selected' : ''}>Good</option>
-                            <option value="yes" ${recording.needs_rerecording ? 'selected' : ''}>Needs Re-recording</option>
+                            onchange="updateFlag(${recording.id}, this.value)">
+                            <option value="pending" ${recording.status === 'pending' ? 'selected' : ''}>Pending</option>
+                            <option value="approved" ${recording.status === 'approved' ? 'selected' : ''}>Approved</option>
+                            <option value="rejected" ${recording.status === 'rejected' ? 'selected' : ''}>Rejected</option>
                         </select>
                     </td>
                 </tr>
             `).join('');
         }
 
-        async function updateFlag(recordingId, needsRerecording) {
+        async function updateFlag(recordingId, status) {
             const dropdown = document.querySelector(`[data-recording-id="${recordingId}"]`);
             const originalValue = dropdown.value;
 
@@ -344,21 +345,21 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ needs_rerecording: needsRerecording })
+                    body: JSON.stringify({ status: status })
                 });
 
                 if (!response.ok) {
-                    throw new Error('Failed to update flag');
+                    throw new Error('Failed to update status');
                 }
 
                 // Update local data
                 const recording = allRecordings.find(r => r.id === recordingId);
                 if (recording) {
-                    recording.needs_rerecording = needsRerecording;
+                    recording.status = status;
                 }
 
                 // Update dropdown styling
-                if (needsRerecording) {
+                if (status === 'rejected') {
                     dropdown.classList.add('needs-rerecording');
                     dropdown.classList.remove('good');
                 } else {
