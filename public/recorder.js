@@ -531,8 +531,10 @@ class RecorderApp {
             console.error('Failed to submit recording:', error);
             // Handle validation errors from server (HTTP 422)
             if (error && error.status === 422 && error.body && error.body.validation) {
-                // Show user-friendly message and a single Retry button
-                this.showValidationError();
+                // Show user-friendly message with actual validation errors
+                const validationErrors = error.body.validation.errors || [];
+                console.error('Validation errors:', validationErrors);
+                this.showValidationError(validationErrors);
                 this.btnSubmit.disabled = false;
                 this.btnSubmit.textContent = '✓ Submit & Next';
                 return; // do not proceed to next
@@ -661,8 +663,14 @@ class RecorderApp {
         if (this.errorRetryBtn) this.errorRetryBtn.style.display = 'inline-block';
     }
 
-    showValidationError() {
-        const msg = 'Hmm. It seems like the recording was either too short or too long for the sentence it was meant for. Would you mind recording again?';
+    showValidationError(errors = []) {
+        let msg = 'Recording validation failed:\n\n';
+        if (errors && errors.length > 0) {
+            msg += errors.map(e => `• ${e}`).join('\n');
+            msg += '\n\nPlease record again.';
+        } else {
+            msg = 'Hmm. It seems like the recording was either too short or too long for the sentence it was meant for. Would you mind recording again?';
+        }
         this.loadingEl.style.display = 'none';
         this.recorderSection.style.display = 'none';
         this.errorSection.style.display = 'block';
