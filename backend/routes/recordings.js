@@ -261,22 +261,24 @@ router.get('/:id/audio', async (req, res) => {
             return res.status(404).json({ error: 'Recording not found' });
         }
         
-        const audioPath = path.join(__dirname, '../../uploads', result.rows[0].audio_filepath);
+        const audioFilepath = result.rows[0].audio_filepath;
         
-        if (!require('fs').existsSync(audioPath)) {
+        // Use storage abstraction to get the file (works with both local and S3)
+        const audioStream = await storage.getStream(audioFilepath);
+        
+        if (!audioStream) {
             return res.status(404).json({ error: 'Audio file not found' });
         }
         
         // Set proper headers for audio streaming
-        const stat = require('fs').statSync(audioPath);
         res.set({
             'Content-Type': 'audio/wav',
-            'Content-Length': stat.size,
             'Accept-Ranges': 'bytes',
-            'Cache-Control': 'no-cache'
+            'Cache-Control': 'public, max-age=31536000', // Cache for 1 year since recordings don't change
         });
         
-        res.sendFile(audioPath);
+        // Stream the audio file
+        audioStream.pipe(res);
         
     } catch (error) {
         console.error('Error fetching audio:', error);
