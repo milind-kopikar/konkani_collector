@@ -187,23 +187,37 @@ router.post('/', upload.single('audio'), validateRecordingUpload, async (req, re
 });
 
 // GET /api/recordings - List all recordings with details for review
+// Only shows the most recent recording per sentence per user
 router.get('/', async (req, res) => {
     try {
         const result = await query(
-            `SELECT 
-                r.id,
-                r.audio_filepath,
-                r.duration_seconds as duration,
-                r.status,
-                r.created_at,
-                r.user_id,
-                s.id as sentence_id,
-                s.text_devanagari as sentence_text,
-                st.title as story_title
-             FROM recordings r
-             JOIN sentences s ON r.sentence_id = s.id
-             JOIN stories st ON s.story_id = st.id
-             ORDER BY r.created_at DESC`
+            `WITH ranked_recordings AS (
+                SELECT 
+                    r.id,
+                    r.audio_filepath,
+                    r.duration_seconds as duration,
+                    r.status,
+                    r.created_at,
+                    r.user_id,
+                    s.id as sentence_id,
+                    s.order_in_story,
+                    s.text_devanagari as sentence_text,
+                    st.id as story_id,
+                    st.title as story_title,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY r.sentence_id, r.user_id 
+                        ORDER BY r.created_at DESC
+                    ) as rn
+                FROM recordings r
+                JOIN sentences s ON r.sentence_id = s.id
+                JOIN stories st ON s.story_id = st.id
+            )
+            SELECT 
+                id, audio_filepath, duration, status, created_at, user_id,
+                sentence_id, order_in_story, sentence_text, story_id, story_title
+            FROM ranked_recordings
+            WHERE rn = 1
+            ORDER BY story_id ASC, order_in_story ASC, created_at DESC`
         );
 
         res.json(result.rows);
