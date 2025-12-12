@@ -82,30 +82,36 @@ async function validateAudio(filePath, expectedText = '') {
         const words = expectedText.trim().split(/\s+/).filter(Boolean).length || 0;
         const secondsPerWord = parseFloat(process.env.SECONDS_PER_WORD) || 0.45; // ~0.45s per word
         checks.expected_duration = words * secondsPerWord;
-        // Allow variance (50% to 300% of expected)
-        const minDuration = checks.expected_duration * 0.5;
-        const maxDuration = checks.expected_duration * 3.0;
+        // Allow variance (30% to 500% of expected) - more lenient for natural speech variation
+        const minDuration = Math.max(0.5, checks.expected_duration * 0.3); // At least 0.5s minimum
+        const maxDuration = Math.min(30, checks.expected_duration * 5.0); // At most 30s maximum
         
         if (checks.duration >= minDuration && checks.duration <= maxDuration) {
             checks.duration_reasonable = true;
         } else {
-            // This is an error: recording length mismatch suggests re-record
-            errors.push(`Duration ${checks.duration.toFixed(1)}s outside expected range [${minDuration.toFixed(1)}, ${maxDuration.toFixed(1)}]s for ${words} words`);
+            // This is a WARNING, not an error - still allow submission
+            // errors.push(`Duration ${checks.duration.toFixed(1)}s outside expected range [${minDuration.toFixed(1)}, ${maxDuration.toFixed(1)}]s for ${words} words`);
+            console.warn(`Duration ${checks.duration.toFixed(1)}s outside expected range [${minDuration.toFixed(1)}, ${maxDuration.toFixed(1)}]s for ${words} words - allowing submission`);
+            checks.duration_reasonable = false; // Mark as false but don't fail validation
         }
     }
 
     // 8. Validate file size
     // Expected: sample_rate * bytes_per_sample * channels * duration + WAV header (44 bytes)
     const expectedSize = checks.sample_rate * 2 * checks.channels * checks.duration + 44;
-    const minSize = expectedSize * 0.9;  // Allow 10% variance
-    const maxSize = expectedSize * 1.1;
+    const minSize = expectedSize * 0.5;  // Allow 50% variance (more lenient)
+    const maxSize = expectedSize * 2.0;  // Allow 2x variance
     
     if (checks.file_size >= minSize && checks.file_size <= maxSize) {
         checks.size_reasonable = true;
     } else if (checks.file_size < minSize) {
-        errors.push(`File size too small: ${checks.file_size} bytes (expected ~${expectedSize.toFixed(0)} bytes)`);
+        // WARNING only, not an error
+        console.warn(`File size ${checks.file_size} bytes smaller than expected ~${expectedSize.toFixed(0)} bytes - allowing submission`);
+        checks.size_reasonable = false;
     } else {
-        errors.push(`File size too large: ${checks.file_size} bytes (expected ~${expectedSize.toFixed(0)} bytes)`);
+        // WARNING only, not an error
+        console.warn(`File size ${checks.file_size} bytes larger than expected ~${expectedSize.toFixed(0)} bytes - allowing submission`);
+        checks.size_reasonable = false;
     }
 
     // 9. Check for silence (basic heuristic)
