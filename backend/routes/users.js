@@ -23,29 +23,29 @@ router.get('/:email/progress', async (req, res, next) => {
                 COUNT(DISTINCT r.id) as total_recordings,
                 COUNT(DISTINCT r.sentence_id) as unique_sentences,
                 COUNT(DISTINCT s.story_id) as stories_started,
-                SUM(CASE 
+                COALESCE(SUM(CASE 
                     WHEN story_progress.completed = true THEN 1 
                     ELSE 0 
-                END) as stories_completed,
+                END), 0) as stories_completed,
                 MAX(r.created_at) as last_activity
             FROM recordings r
             JOIN sentences s ON s.id = r.sentence_id
             LEFT JOIN (
                 SELECT 
-                    story_id,
-                    user_id,
+                    s2.story_id,
+                    r2.user_id,
                     CASE 
-                        WHEN COUNT(DISTINCT sentence_id) >= (
+                        WHEN COUNT(DISTINCT r2.sentence_id) >= (
                             SELECT COUNT(*) 
                             FROM sentences 
-                            WHERE story_id = r.story_id
+                            WHERE story_id = s2.story_id
                         ) THEN true 
                         ELSE false 
                     END as completed
-                FROM recordings r
-                JOIN sentences s2 ON s2.id = r.sentence_id
-                WHERE r.user_id = $1
-                GROUP BY story_id, user_id
+                FROM recordings r2
+                JOIN sentences s2 ON s2.id = r2.sentence_id
+                WHERE r2.user_id = $1
+                GROUP BY s2.story_id, r2.user_id
             ) story_progress ON story_progress.story_id = s.story_id 
                 AND story_progress.user_id = r.user_id
             WHERE r.user_id = $1
