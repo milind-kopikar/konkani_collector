@@ -121,8 +121,10 @@ router.post('/', upload.single('audio'), validateRecordingUpload, async (req, re
             return res.status(422).json({ error: 'Validation failed', validation: { valid: false, errors: [e.message] } });
         }
 
-        // 4. Generate storage filename
-        const filename = `recordings/${user_id.replace(/[^a-z0-9]/gi, '_')}_${sentence_id}_${uuidv4()}.wav`;
+        // 4. Generate storage filename (support S3_PREFIX to isolate project data)
+        let prefix = process.env.S3_PREFIX || '';
+        if (prefix && !prefix.endsWith('/')) prefix = prefix + '/';
+        const filename = `${prefix}recordings/${user_id.replace(/[^a-z0-9]/gi, '_')}_${sentence_id}_${uuidv4()}.wav`;
 
         // 5. Save to storage
         const storedPath = await storage.save(wavPath, filename);
@@ -233,8 +235,8 @@ router.patch('/:id', async (req, res) => {
         const { id } = req.params;
         const { status } = req.body;
 
-        if (!['pending', 'approved', 'rejected'].includes(status)) {
-            return res.status(400).json({ error: 'status must be pending, approved, or rejected' });
+        if (!['pending', 'approved', 'rejected', 'deleted'].includes(status)) {
+            return res.status(400).json({ error: 'status must be pending, approved, rejected, or deleted' });
         }
 
         const result = await query(
