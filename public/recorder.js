@@ -481,7 +481,6 @@ class RecorderApp {
             alert(`⚠️ Playback failed: ${err.message}`);
         }
     }
-    }
     
     rerecord() {
         if (this.errorSection) this.errorSection.style.display = 'none';
