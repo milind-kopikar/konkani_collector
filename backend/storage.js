@@ -5,7 +5,7 @@
 
 const fs = require('fs').promises;
 const path = require('path');
-const { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { Upload } = require('@aws-sdk/lib-storage');
 const { createReadStream } = require('fs');
 
@@ -174,6 +174,32 @@ class Storage {
     async _getFromLocal(filepath) {
         const fullPath = path.join(this.uploadDir, filepath);
         return await fs.readFile(fullPath);
+    }
+
+    /**
+     * Delete file from storage
+     * @param {string} filepath - Path returned from save()
+     * @returns {Promise<void>}
+     */
+    async deleteFile(filepath) {
+        if (this.type === 's3') {
+            return await this._deleteFromS3(filepath);
+        } else {
+            return await this._deleteFromLocal(filepath);
+        }
+    }
+
+    async _deleteFromS3(filepath) {
+        const command = new DeleteObjectCommand({
+            Bucket: this.bucket,
+            Key: filepath,
+        });
+        await this.s3Client.send(command);
+    }
+
+    async _deleteFromLocal(filepath) {
+        const fullPath = path.join(this.uploadDir, filepath);
+        await fs.unlink(fullPath);
     }
 
     /**

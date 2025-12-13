@@ -314,7 +314,13 @@ class RecorderApp {
             };
             
             this.mediaRecorder.onstop = () => {
-                this.recordedBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+                const mimeType = this.mediaRecorder.mimeType || 'audio/webm';
+                this.recordedBlob = new Blob(this.audioChunks, { type: mimeType });
+                console.log('Recording stopped. Blob created:', {
+                    size: this.recordedBlob.size,
+                    type: this.recordedBlob.type,
+                    mimeType: mimeType
+                });
                 this.onRecordingComplete();
             };
             
@@ -382,19 +388,31 @@ class RecorderApp {
     }
     
     async playRecording() {
+        // Create Audio element FIRST (within user gesture - critical for mobile)
+        const audio = new Audio();
+        audio.controls = false;
+        audio.autoplay = false;
+        
         let audioUrl;
         
         // If there's a newly recorded blob, play that
         if (this.recordedBlob) {
-            console.log('Playing newly recorded blob, size:', this.recordedBlob.size);
+            console.log('Playing newly recorded blob, size:', this.recordedBlob.size, 'type:', this.recordedBlob.type);
+            
+            // Create blob URL with explicit type
             audioUrl = URL.createObjectURL(this.recordedBlob);
+            audio.src = audioUrl;
+            
+            // Set MIME type explicitly for mobile compatibility
+            const audioType = this.recordedBlob.type || 'audio/webm';
+            console.log('Setting audio type:', audioType);
         } 
         // Otherwise, if sentence has existing recording, fetch and play it
         else if (this.currentSentence.has_recording && this.currentSentence.recording_id) {
+            this.btnPlay.textContent = '⏳ Loading...';
+            this.btnPlay.disabled = true;
+            
             try {
-                this.btnPlay.textContent = '⏳ Loading...';
-                this.btnPlay.disabled = true;
-                
                 console.log('Fetching recording:', this.currentSentence.recording_id);
                 const response = await fetch(`/api/recordings/${this.currentSentence.recording_id}/audio`);
                 if (!response.ok) {
@@ -406,6 +424,7 @@ class RecorderApp {
                 const blob = await response.blob();
                 console.log('Received blob, size:', blob.size, 'type:', blob.type);
                 audioUrl = URL.createObjectURL(blob);
+                audio.src = audioUrl;
             } catch (error) {
                 console.error('Error loading existing recording:', error);
                 this.showStatus('Failed to load existing recording', 'error');
@@ -414,50 +433,54 @@ class RecorderApp {
                 return;
             }
         } else {
+            console.log('No recording to play');
             return;
         }
         
-        const audio = new Audio();
-        audio.preload = 'auto';
-        audio.src = audioUrl;
-        
-        console.log('Audio element created, src:', audioUrl);
+        console.log('Audio element created, src:', audio.src);
         
         this.btnPlay.textContent = '⏸️ Playing...';
         this.btnPlay.disabled = true;
         
-        // Use loadeddata instead of canplaythrough for more reliable playback
-        audio.addEventListener('loadeddata', () => {
-            console.log('Audio loaded, duration:', audio.duration, 'seconds');
-            audio.play().catch(err => {
-                console.error('Play error:', err);
-                this.btnPlay.textContent = '▶️ Play';
-                this.btnPlay.disabled = false;
-                URL.revokeObjectURL(audioUrl);
-            });
-        }, { once: true });
+        // Critical for mobile: ensure the audio is loaded
+        audio.load();
         
+        // Set up event handlers BEFORE playing
         audio.addEventListener('ended', () => {
             console.log('Audio playback ended');
             this.btnPlay.textContent = '▶️ Play';
             this.btnPlay.disabled = false;
-            URL.revokeObjectURL(audioUrl);
-        });
+            if (audioUrl) URL.revokeObjectURL(audioUrl);
+        }, { once: true });
         
         audio.addEventListener('error', (e) => {
-            console.error('Audio error:', e, 'Error code:', audio.error ? audio.error.code : 'unknown');
+            console.error('Audio error:', e);
+            console.error('Audio error code:', audio.error ? audio.error.code : 'unknown');
+            console.error('Audio error message:', audio.error ? audio.error.message : 'unknown');
             this.btnPlay.textContent = '▶️ Play';
             this.btnPlay.disabled = false;
-            URL.revokeObjectURL(audioUrl);
+            if (audioUrl) URL.revokeObjectURL(audioUrl);
             this.showStatus('Error playing audio', 'error');
-        });
+            alert('⚠️ Audio playback error. Check console for details.');
+        }, { once: true });
         
-        audio.addEventListener('pause', () => {
-            console.log('Audio paused at:', audio.currentTime, '/', audio.duration);
-        });
-        
-        // Start loading the audio
-        audio.load();
+        // Start playing immediately within user gesture (critical for mobile Safari/Chrome)
+        try {
+            const playPromise = audio.play();
+            
+            if (playPromise !== undefined) {
+                await playPromise;
+                console.log('Audio playback started successfully');
+            }
+        } catch (err) {
+            console.error('Play error:', err);
+            this.btnPlay.textContent = '▶️ Play';
+            this.btnPlay.disabled = false;
+            if (audioUrl) URL.revokeObjectURL(audioUrl);
+            this.showStatus('Failed to play audio', 'error');
+            alert(`⚠️ Playback failed: ${err.message}`);
+        }
+    }
     }
     
     rerecord() {
