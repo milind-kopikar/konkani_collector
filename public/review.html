@@ -378,7 +378,8 @@
                         <div class="sentence-text">${recording.sentence_text}</div>
                     </td>
                     <td>
-                        <audio controls class="audio-player" preload="none" playsinline src="/api/recordings/${recording.id}/audio">
+                        <audio controls class="audio-player" preload="metadata" playsinline>
+                            <source src="/api/recordings/${recording.id}/audio" type="audio/wav">
                             Your browser does not support the audio element.
                         </audio>
                     </td>
