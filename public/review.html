@@ -378,7 +378,7 @@
                         <div class="sentence-text">${recording.sentence_text}</div>
                     </td>
                     <td>
-                        <audio controls class="audio-player" preload="metadata" playsinline>
+                        <audio controls class="audio-player" preload="metadata" playsinline data-recording-id="${recording.id}">
                             <source src="/api/recordings/${recording.id}/audio" type="audio/wav">
                             Your browser does not support the audio element.
                         </audio>
@@ -396,6 +396,18 @@
                     </td>
                 </tr>
             `).join('');
+
+            // Add error handlers and mobile fix for audio elements
+            document.querySelectorAll('.audio-player').forEach(audio => {
+                audio.addEventListener('error', (e) => {
+                    console.error('Audio error for recording', audio.dataset.recordingId, ':', e);
+                    console.error('Error details:', audio.error);
+                });
+                
+                audio.addEventListener('loadeddata', () => {
+                    console.log('Audio loaded successfully for recording', audio.dataset.recordingId);
+                });
+            });
         }
 
         async function updateFlag(recordingId, status) {
