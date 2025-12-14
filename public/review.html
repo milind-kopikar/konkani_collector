@@ -451,6 +451,29 @@
                     }
                 });
             });
+            
+            // Test network accessibility for first audio file
+            if (document.querySelectorAll('.audio-player').length > 0) {
+                const firstAudio = document.querySelectorAll('.audio-player')[0];
+                const audioUrl = firstAudio.querySelector('source').src;
+                console.log('Testing network fetch for:', audioUrl);
+                
+                fetch(audioUrl, { method: 'HEAD' })
+                    .then(response => {
+                        console.log('Network test response:', {
+                            status: response.status,
+                            statusText: response.statusText,
+                            headers: {
+                                'content-type': response.headers.get('content-type'),
+                                'content-length': response.headers.get('content-length'),
+                                'access-control-allow-origin': response.headers.get('access-control-allow-origin')
+                            }
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Network test FAILED:', error);
+                    });
+            }
         }
 
         async function updateFlag(recordingId, status) {

@@ -286,11 +286,14 @@ router.get('/:id/audio', async (req, res) => {
             return res.status(404).json({ error: 'Audio file not found' });
         }
         
-        // Set proper headers for audio streaming
+        // Set proper headers for audio streaming with explicit CORS
         res.set({
             'Content-Type': 'audio/wav',
             'Accept-Ranges': 'bytes',
             'Cache-Control': 'public, max-age=31536000', // Cache for 1 year since recordings don't change
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Headers': 'Range',
         });
         
         // Stream the audio file
