@@ -310,8 +310,57 @@
             statusEl.textContent = 'Loading...';
             btn.disabled = true;
 
-            // Fetch audio as blob first, then create object URL
-            // This bypasses some mobile browser streaming issues
+            // Create audio element FIRST in user gesture context
+            const audio = new Audio();
+            currentAudio = audio;
+
+            // Set up event handlers before loading
+            audio.addEventListener('loadedmetadata', () => {
+                console.log(`[${recordingId}] Audio loaded, duration: ${audio.duration}s`);
+                statusEl.textContent = `Duration: ${audio.duration.toFixed(1)}s`;
+            });
+
+            audio.addEventListener('playing', () => {
+                console.log(`[${recordingId}] Playing...`);
+                statusEl.textContent = '▶ Playing...';
+                btn.textContent = '⏸ Pause';
+                btn.disabled = false;
+                btn.onclick = () => {
+                    audio.pause();
+                    audio.currentTime = 0;
+                    URL.revokeObjectURL(audio.src);
+                };
+            });
+
+            audio.addEventListener('ended', () => {
+                console.log(`[${recordingId}] Playback ended`);
+                statusEl.textContent = '✓ Finished';
+                btn.textContent = '▶ Play';
+                btn.disabled = false;
+                btn.onclick = () => playAudio(recordingId);
+                URL.revokeObjectURL(audio.src);
+                currentAudio = null;
+            });
+
+            audio.addEventListener('error', (e) => {
+                console.error(`[${recordingId}] Audio error:`, e);
+                if (audio.error) {
+                    const errors = {
+                        1: 'Loading aborted',
+                        2: 'Network error', 
+                        3: 'Decode error',
+                        4: 'Format not supported'
+                    };
+                    console.error(`[${recordingId}] Error code:`, audio.error.code, errors[audio.error.code]);
+                    statusEl.textContent = `Error: ${errors[audio.error.code]}`;
+                } else {
+                    statusEl.textContent = 'Playback error';
+                }
+                URL.revokeObjectURL(audio.src);
+                btn.disabled = false;
+            });
+
+            // Fetch audio as blob, then set src and play
             fetch(`/api/recordings/${recordingId}/audio`)
                 .then(response => {
                     if (!response.ok) {
@@ -323,85 +372,23 @@
                 .then(blob => {
                     console.log(`[${recordingId}] Blob loaded, size: ${blob.size} bytes, type: ${blob.type}`);
                     
-                    // Create object URL from blob
+                    // Create object URL and set as source
                     const objectUrl = URL.createObjectURL(blob);
-                    console.log(`[${recordingId}] Object URL created:`, objectUrl);
-                    
-                    // Create audio element programmatically
-                    const audio = new Audio();
                     audio.src = objectUrl;
-            
-                    audio.addEventListener('loadstart', () => {
-                        console.log(`[${recordingId}] Loading audio...`);
-                    });
-
-                    audio.addEventListener('loadedmetadata', () => {
-                        console.log(`[${recordingId}] Audio loaded, duration: ${audio.duration}s`);
-                        statusEl.textContent = `Duration: ${audio.duration.toFixed(1)}s`;
-                    });
-
-                    audio.addEventListener('canplay', () => {
-                        console.log(`[${recordingId}] Ready to play`);
-                        audio.play().catch(err => {
-                            console.error(`[${recordingId}] Play failed:`, err);
-                            statusEl.textContent = 'Play failed';
-                            btn.disabled = false;
-                        });
-                    });
-
-                    audio.addEventListener('playing', () => {
-                        console.log(`[${recordingId}] Playing...`);
-                        statusEl.textContent = '▶ Playing...';
-                        btn.textContent = '⏸ Pause';
-                        btn.disabled = false;
-                        btn.onclick = () => {
-                            audio.pause();
-                            audio.currentTime = 0;
-                        };
-                    });
-
-                    audio.addEventListener('ended', () => {
-                        console.log(`[${recordingId}] Playback ended`);
-                        statusEl.textContent = '✓ Finished';
-                        btn.textContent = '▶ Play';
-                        btn.disabled = false;
-                        btn.onclick = () => playAudio(recordingId);
-                        
-                        // Clean up object URL to free memory
-                        URL.revokeObjectURL(audio.src);
-                        currentAudio = null;
-                    });
-
-                    audio.addEventListener('error', (e) => {
-                        console.error(`[${recordingId}] Audio error:`, e);
-                        console.error(`[${recordingId}] audio.error:`, audio.error);
-                        
-                        if (audio.error) {
-                            const errors = {
-                                1: 'Loading aborted',
-                                2: 'Network error', 
-                                3: 'Decode error',
-                                4: 'Format not supported'
-                            };
-                            console.error(`[${recordingId}] Error code:`, audio.error.code, errors[audio.error.code]);
-                            statusEl.textContent = `Error: ${errors[audio.error.code]}`;
-                        } else {
-                            statusEl.textContent = 'Playback error';
-                        }
-                        
-                        // Clean up object URL
-                        URL.revokeObjectURL(audio.src);
-                        btn.disabled = false;
-                    });
-
-                    // Load the audio
-                    audio.load();
-                    currentAudio = audio;
+                    
+                    // Play immediately - still within user gesture context chain
+                    return audio.play();
+                })
+                .then(() => {
+                    console.log(`[${recordingId}] Play started successfully`);
                 })
                 .catch(error => {
-                    console.error(`[${recordingId}] Fetch failed:`, error);
-                    statusEl.textContent = `Fetch error: ${error.message}`;
+                    console.error(`[${recordingId}] Error:`, error);
+                    statusEl.textContent = `Error: ${error.message}`;
                     btn.disabled = false;
+                    if (audio.src && audio.src.startsWith('blob:')) {
+                        URL.revokeObjectURL(audio.src);
+                    }
                 });
         }
 
