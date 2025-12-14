@@ -399,13 +399,56 @@
 
             // Add error handlers and mobile fix for audio elements
             document.querySelectorAll('.audio-player').forEach(audio => {
-                audio.addEventListener('error', (e) => {
-                    console.error('Audio error for recording', audio.dataset.recordingId, ':', e);
-                    console.error('Error details:', audio.error);
+                const recordingId = audio.dataset.recordingId;
+                
+                console.log('Setting up audio player for recording', recordingId);
+                console.log('Audio src:', audio.querySelector('source')?.src);
+                
+                audio.addEventListener('loadstart', () => {
+                    console.log(`[${recordingId}] loadstart - browser started loading`);
+                });
+                
+                audio.addEventListener('loadedmetadata', () => {
+                    console.log(`[${recordingId}] loadedmetadata - duration:`, audio.duration);
                 });
                 
                 audio.addEventListener('loadeddata', () => {
-                    console.log('Audio loaded successfully for recording', audio.dataset.recordingId);
+                    console.log(`[${recordingId}] loadeddata - ready to play`);
+                });
+                
+                audio.addEventListener('canplay', () => {
+                    console.log(`[${recordingId}] canplay - can start playing`);
+                });
+                
+                audio.addEventListener('play', () => {
+                    console.log(`[${recordingId}] play event triggered`);
+                });
+                
+                audio.addEventListener('playing', () => {
+                    console.log(`[${recordingId}] playing - actually playing now`);
+                });
+                
+                audio.addEventListener('stalled', () => {
+                    console.warn(`[${recordingId}] stalled - download stopped`);
+                });
+                
+                audio.addEventListener('suspend', () => {
+                    console.warn(`[${recordingId}] suspend - loading suspended`);
+                });
+                
+                audio.addEventListener('error', (e) => {
+                    console.error(`[${recordingId}] ERROR:`, e);
+                    if (audio.error) {
+                        console.error(`[${recordingId}] Error code:`, audio.error.code);
+                        console.error(`[${recordingId}] Error message:`, audio.error.message);
+                        const errorMessages = {
+                            1: 'MEDIA_ERR_ABORTED - fetching aborted',
+                            2: 'MEDIA_ERR_NETWORK - network error',
+                            3: 'MEDIA_ERR_DECODE - decoding error',
+                            4: 'MEDIA_ERR_SRC_NOT_SUPPORTED - format not supported'
+                        };
+                        console.error(`[${recordingId}] Error type:`, errorMessages[audio.error.code] || 'Unknown');
+                    }
                 });
             });
         }
