@@ -295,6 +295,83 @@
 
     <script>
         let allRecordings = [];
+        let currentAudio = null; // Track currently playing audio
+
+        function playAudio(recordingId) {
+            // Stop any currently playing audio
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio = null;
+            }
+
+            const statusEl = document.getElementById(`status-${recordingId}`);
+            const btn = document.querySelector(`button[data-recording-id="${recordingId}"]`);
+            
+            statusEl.textContent = 'Loading...';
+            btn.disabled = true;
+
+            // Create audio element programmatically (works better on mobile)
+            const audio = new Audio();
+            audio.src = `/api/recordings/${recordingId}/audio`;
+            
+            audio.addEventListener('loadstart', () => {
+                console.log(`[${recordingId}] Loading audio...`);
+            });
+
+            audio.addEventListener('loadedmetadata', () => {
+                console.log(`[${recordingId}] Audio loaded, duration: ${audio.duration}s`);
+                statusEl.textContent = `Duration: ${audio.duration.toFixed(1)}s`;
+            });
+
+            audio.addEventListener('canplay', () => {
+                console.log(`[${recordingId}] Ready to play`);
+                audio.play().catch(err => {
+                    console.error(`[${recordingId}] Play failed:`, err);
+                    statusEl.textContent = 'Play failed';
+                    btn.disabled = false;
+                });
+            });
+
+            audio.addEventListener('playing', () => {
+                console.log(`[${recordingId}] Playing...`);
+                statusEl.textContent = '▶ Playing...';
+                btn.textContent = '⏸ Pause';
+                btn.disabled = false;
+                btn.onclick = () => {
+                    audio.pause();
+                    audio.currentTime = 0;
+                };
+            });
+
+            audio.addEventListener('ended', () => {
+                console.log(`[${recordingId}] Playback ended`);
+                statusEl.textContent = '✓ Finished';
+                btn.textContent = '▶ Play';
+                btn.disabled = false;
+                btn.onclick = () => playAudio(recordingId);
+                currentAudio = null;
+            });
+
+            audio.addEventListener('error', (e) => {
+                console.error(`[${recordingId}] Audio error:`, e);
+                if (audio.error) {
+                    const errors = {
+                        1: 'Loading aborted',
+                        2: 'Network error',
+                        3: 'Decode error',
+                        4: 'Format not supported'
+                    };
+                    statusEl.textContent = `Error: ${errors[audio.error.code] || 'Unknown'}`;
+                } else {
+                    statusEl.textContent = 'Error loading audio';
+                }
+                btn.disabled = false;
+            });
+
+            // Load the audio
+            audio.load();
+            currentAudio = audio;
+        }
 
         function maskEmail(email) {
             if (!email || email.length < 3) return email;
@@ -378,10 +455,14 @@
                         <div class="sentence-text">${recording.sentence_text}</div>
                     </td>
                     <td>
-                        <audio controls class="audio-player" preload="metadata" playsinline data-recording-id="${recording.id}">
-                            <source src="/api/recordings/${recording.id}/audio" type="audio/wav">
-                            Your browser does not support the audio element.
-                        </audio>
+                        <button 
+                            class="play-btn" 
+                            data-recording-id="${recording.id}"
+                            onclick="playAudio(${recording.id})"
+                            style="padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                            ▶ Play
+                        </button>
+                        <span id="status-${recording.id}" style="margin-left: 10px; font-size: 12px; color: #64748b;"></span>
                     </td>
                     <td>
                         <select 
@@ -396,84 +477,6 @@
                     </td>
                 </tr>
             `).join('');
-
-            // Add error handlers and mobile fix for audio elements
-            document.querySelectorAll('.audio-player').forEach(audio => {
-                const recordingId = audio.dataset.recordingId;
-                
-                console.log('Setting up audio player for recording', recordingId);
-                console.log('Audio src:', audio.querySelector('source')?.src);
-                
-                audio.addEventListener('loadstart', () => {
-                    console.log(`[${recordingId}] loadstart - browser started loading`);
-                });
-                
-                audio.addEventListener('loadedmetadata', () => {
-                    console.log(`[${recordingId}] loadedmetadata - duration:`, audio.duration);
-                });
-                
-                audio.addEventListener('loadeddata', () => {
-                    console.log(`[${recordingId}] loadeddata - ready to play`);
-                });
-                
-                audio.addEventListener('canplay', () => {
-                    console.log(`[${recordingId}] canplay - can start playing`);
-                });
-                
-                audio.addEventListener('play', () => {
-                    console.log(`[${recordingId}] play event triggered`);
-                });
-                
-                audio.addEventListener('playing', () => {
-                    console.log(`[${recordingId}] playing - actually playing now`);
-                });
-                
-                audio.addEventListener('stalled', () => {
-                    console.warn(`[${recordingId}] stalled - download stopped`);
-                });
-                
-                audio.addEventListener('suspend', () => {
-                    console.warn(`[${recordingId}] suspend - loading suspended`);
-                });
-                
-                audio.addEventListener('error', (e) => {
-                    console.error(`[${recordingId}] ERROR:`, e);
-                    if (audio.error) {
-                        console.error(`[${recordingId}] Error code:`, audio.error.code);
-                        console.error(`[${recordingId}] Error message:`, audio.error.message);
-                        const errorMessages = {
-                            1: 'MEDIA_ERR_ABORTED - fetching aborted',
-                            2: 'MEDIA_ERR_NETWORK - network error',
-                            3: 'MEDIA_ERR_DECODE - decoding error',
-                            4: 'MEDIA_ERR_SRC_NOT_SUPPORTED - format not supported'
-                        };
-                        console.error(`[${recordingId}] Error type:`, errorMessages[audio.error.code] || 'Unknown');
-                    }
-                });
-            });
-            
-            // Test network accessibility for first audio file
-            if (document.querySelectorAll('.audio-player').length > 0) {
-                const firstAudio = document.querySelectorAll('.audio-player')[0];
-                const audioUrl = firstAudio.querySelector('source').src;
-                console.log('Testing network fetch for:', audioUrl);
-                
-                fetch(audioUrl, { method: 'HEAD' })
-                    .then(response => {
-                        console.log('Network test response:', {
-                            status: response.status,
-                            statusText: response.statusText,
-                            headers: {
-                                'content-type': response.headers.get('content-type'),
-                                'content-length': response.headers.get('content-length'),
-                                'access-control-allow-origin': response.headers.get('access-control-allow-origin')
-                            }
-                        });
-                    })
-                    .catch(error => {
-                        console.error('Network test FAILED:', error);
-                    });
-            }
         }
 
         async function updateFlag(recordingId, status) {
