@@ -1,4 +1,4 @@
-# Konkani Collector - Project Complete ✅
+cd ../# Konkani Collector - Project Complete ✅
 
 ## What Was Built
 
