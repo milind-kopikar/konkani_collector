@@ -76,7 +76,10 @@ npm start
 ### Import a Story
 
 ```bash
-node scripts/import-story.js --file stories/story1.txt --title "पाव वाट"
+# Use --title-from-file to avoid PowerShell encoding issues; see "Adding New Stories to Railway" below
+node scripts/import-story.js --file story1.txt --title-from-file
+# Or with explicit title:
+node scripts/import-story.js --file story1.txt --title "पाव वाट"
 ```
 
 ### Export for ASR Training
@@ -214,6 +217,63 @@ AWS_SECRET_ACCESS_KEY=<R2_secret_key>
 4. Set environment variables in Railway dashboard
 5. Deploy automatically on git push
 
+---
+
+## Adding New Stories to Railway Database
+
+**Important:** Before adding any new story to the Railway database, ensure it is broken into **short sentences**. There must be **no compound sentences**. Long or compound sentences make recording harder and hurt ASR training quality.
+
+### Sentence Rules (No Compound Sentences)
+
+A single database entry = one short sentence. The import script splits text using these rules:
+
+| Rule | Description | Example |
+|------|-------------|---------|
+| **Devanagari danda** | `।` and `॥` always end a sentence | `काय्ळो राब्तालो। गुब्ची राब्तालि।` → 2 sentences |
+| **Newlines** | Each line break is a boundary | |
+| **Period, !, ?** | Outside quotes, these end a sentence | `ठक् ठक् ठक्! बागिल धाडाय्लें।` → 2 sentences |
+| **Speaker changes** | When one speaker's quote ends (closing `"`), the next speaker starts a new sentence | `" कोण तें?"` ends; `काय्ळो ... " हांव!"` is a separate sentence |
+
+**Inside quoted dialogue** (`"..."`), periods and `!` `?` do **not** split—the whole quote is one utterance.
+
+**Bad (compound):**  
+`गुब्चीने भित्तर्थाव्नु निम्गिले - " कोण तें?" काय्ळो कड्कड्तचि म्हळालो , " हांव! काय्ळो!"` — two speakers in one entry.
+
+**Good (separate entries):**  
+1. `गुब्चीने भित्तर्थाव्नु निम्गिले - " कोण तें?"`  
+2. `काय्ळो कड्कड्तचि म्हळालो , " हांव! काय्ळो!"`
+
+If your `.txt` file uses these punctuation rules, the import script will split correctly. Otherwise, edit the file to add sentence boundaries (e.g. line breaks, `।`, `!`, `?`) before importing.
+
+### How to Upload a Story to Railway
+
+1. **Set the Railway database URL**
+   ```powershell
+   $env:DATABASE_URL = "postgresql://postgres:password@host:port/railway"
+   ```
+   (Get the connection string from Railway → PostgreSQL service → Connect.)
+
+2. **Import the story** (use `--title-from-file` to avoid PowerShell encoding issues):
+   ```powershell
+   node scripts/import-story.js --file story6.txt --title-from-file --replace
+   ```
+   - `--replace` removes an existing story with the same `source_file` and re-imports.
+
+3. **Fix titles if needed** (e.g. after PowerShell corruption):
+   ```powershell
+   node scripts/fix-story-titles.js
+   ```
+
+4. **Verify**
+   ```powershell
+   node scripts/list-stories.js
+   ```
+
+5. **Check on the app**  
+   Open https://konkanicollector-production.up.railway.app/ and confirm the story and sentences look correct.
+
+For more detail, see `RAILWAY_STORY_IMPORT_GUIDE.md` and `STORY_IMPORT_PROTECTION.md`.
+
 ## Project Structure
 
 ```
@@ -290,7 +350,7 @@ Notes:
 
 ## Development Workflow
 
-1. **Import stories**: `node scripts/import-story.js --file story.txt`
+1. **Import stories**: Ensure short sentences (no compounds)—see "Adding New Stories to Railway Database". Then: `node scripts/import-story.js --file story.txt --title-from-file`
 2. **Start server**: `npm start`
 3. **Record audio**: Open http://localhost:3000/recorder.html
 4. **Verify data**: `curl http://localhost:3000/api/test/health`

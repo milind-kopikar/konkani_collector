@@ -5,6 +5,19 @@ When importing stories to the database, Unicode characters in Devanagari titles 
 - ❌ Wrong: "भलगल रलयतर" 
 - ✅ Correct: "भोलागली रेलयात्रा"
 
+## Sentence Splitting Rules
+
+The import script splits stories into sentences using these rules:
+1. **Devanagari danda (।), double danda (॥), newlines**: always sentence boundaries.
+2. **Periods (.), ! and ?**: sentence boundaries when outside quoted dialogue.
+3. **Speaker changes**: when one speaker's quote ends (closing `"`), that ends the sentence. The next speaker's quote starts a new sentence. Inside `"..."`, `. ! ?` are NOT boundaries.
+
+Example: `गुब्चीने भित्तर्थाव्नु निम्गिले - " कोण तें?" काय्ळो कड्कड्तचि म्हळालो , " हांव! काय्ळो!"` splits into two sentences:
+- गुब्चीने भित्तर्थाव्नु निम्गिले - " कोण तें?"
+- काय्ळो कड्कड्तचि म्हळालो , " हांव! काय्ळो!"
+
+Use `--title-from-file` to read the title from the first line (avoids PowerShell encoding issues).
+
 ## Solution Implemented
 
 ### 1. Automated Import Script
@@ -104,7 +117,7 @@ Expected output:
 3  बब्रुलिंगप्पागले समर्पण  story3.txt   41 sentences
 4  भोलागली रेलयात्रा        story4.txt   38 sentences
 5  रोहन होड ज़ाल्लो!        story5.txt   35 sentences
-6  काय्ळो आनी गुब्ची        story6.txt   48 sentences
+6  काय्ळो आनी गुब्ची        story6.txt   70 sentences
 ```
 
 ## Files Created/Modified

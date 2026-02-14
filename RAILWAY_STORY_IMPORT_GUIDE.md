@@ -146,7 +146,7 @@ Expected output:
 3  बब्रुलिंगप्पागले समर्पण  story3.txt   41 sentences
 4  भोलागली रेलयात्रा        story4.txt   38 sentences
 5  रोहन होड ज़ाल्लो!        story5.txt   35 sentences
-6  काय्ळो आनी गुब्ची        story6.txt   48 sentences
+6  काय्ळो आनी गुब्ची        story6.txt   70 sentences
 ```
 
 ---
