@@ -18,13 +18,14 @@ const STORIES = [
   { file: 'story2.txt', title: 'दक्ष प्रजापतिंगले यज्ञ', language: 'konkani' },
   { file: 'story3.txt', title: 'बब्रुलिंगप्पागले समर्पण', language: 'konkani' },
   { file: 'story4.txt', title: 'भोलागली रेलयात्रा', language: 'konkani' },
-  { file: 'story5.txt', title: 'रोहन होड ज़ाल्लो!', language: 'konkani' }
+  { file: 'story5.txt', title: 'रोहन होड ज़ाल्लो!', language: 'konkani' },
+  { file: 'story6.txt', title: 'काय्ळो आनी गुब्ची', language: 'konkani' }
 ];
 ```
 
 **Features:**
 - ✅ Preserves Unicode characters perfectly
-- ✅ Imports all 5 stories with correct titles
+- ✅ Imports all 6 stories with correct titles
 - ✅ Includes `--dry-run` mode to preview before importing
 - ✅ Includes `--replace` flag to avoid duplicates
 - ✅ Shows progress and summary
@@ -39,7 +40,7 @@ Emergency fix script to correct titles if they get corrupted:
 node scripts/fix-story-titles.js
 ```
 
-This updates titles in the database to their correct values.
+This script updates titles by `source_file` with hardcoded Devanagari values, fixing story4, story5, and story6.
 
 ### 3. Updated PowerShell Script
 **File:** `scripts/import-stories.ps1`
@@ -85,6 +86,7 @@ $env:DATABASE_URL = "postgresql://user:pass@host:5432/railway"
 ```bash
 node scripts/import-story.js --file story4.txt --title "भोलागली रेलयात्रा" --replace
 node scripts/import-story.js --file story5.txt --title "रोहन होड ज़ाल्लो!" --replace
+node scripts/import-story.js --file story6.txt --title "काय्ळो आनी गुब्ची" --replace
 ```
 
 ## Verification
@@ -102,6 +104,7 @@ Expected output:
 3  बब्रुलिंगप्पागले समर्पण  story3.txt   41 sentences
 4  भोलागली रेलयात्रा        story4.txt   38 sentences
 5  रोहन होड ज़ाल्लो!        story5.txt   35 sentences
+6  काय्ळो आनी गुब्ची        story6.txt   48 sentences
 ```
 
 ## Files Created/Modified
@@ -121,11 +124,14 @@ Expected output:
 5. **Test locally first** before deploying to production
 6. **Keep story .txt files** as the source of truth
 
-## Local Database Fix Applied
+## Title Fix Script (fix-story-titles.js)
 
-The local database has been corrected:
-- Story 5 (story4.txt): Title updated to "भोलागली रेलयात्रा" ✅
-- Story 6 (story5.txt): Title updated to "रोहन होड ज़ाल्लो!" ✅
+The `fix-story-titles.js` script targets stories by `source_file` and updates titles to correct Devanagari:
+- story4.txt: भोलागली रेलयात्रा
+- story5.txt: रोहन होड ज़ाल्लो!
+- story6.txt: काय्ळो आनी गुब्ची
+
+Run after import if PowerShell corrupted titles: `node scripts/fix-story-titles.js`
 
 ## Ready for Production
 

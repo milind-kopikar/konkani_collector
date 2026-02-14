@@ -10,6 +10,7 @@ When importing stories, ensure titles are preserved **exactly** as they appear i
 - Story 3: `बब्रुलिंगप्पागले समर्पण`
 - Story 4: `भोलागली रेलयात्रा`
 - Story 5: `रोहन होड ज़ाल्लो!`
+- Story 6: `काय्ळो आनी गुब्ची`
 
 Unicode characters can get corrupted if titles are copied incorrectly. Always use the automated import scripts.
 
@@ -97,6 +98,9 @@ node scripts/import-story.js --file story4.txt --title "भोलागली �
 
 # Story 5
 node scripts/import-story.js --file story5.txt --title "रोहन होड ज़ाल्लो!" --replace
+
+# Story 6
+node scripts/import-story.js --file story6.txt --title "काय्ळो आनी गुब्ची" --replace
 ```
 
 ---
@@ -142,6 +146,7 @@ Expected output:
 3  बब्रुलिंगप्पागले समर्पण  story3.txt   41 sentences
 4  भोलागली रेलयात्रा        story4.txt   38 sentences
 5  रोहन होड ज़ाल्लो!        story5.txt   35 sentences
+6  काय्ळो आनी गुब्ची        story6.txt   48 sentences
 ```
 
 ---
@@ -151,7 +156,7 @@ Expected output:
 - [ ] Railway PostgreSQL service created
 - [ ] Schema imported (`scripts/setup-railway-db.js`)
 - [ ] DATABASE_URL environment variable set
-- [ ] All 5 stories imported with correct titles
+- [ ] All 6 stories imported with correct titles
 - [ ] Story titles verified with `list-stories.js`
 - [ ] Sample sentences checked
 - [ ] Web application deployed and tested
@@ -165,7 +170,7 @@ Expected output:
 
 | Script | Purpose |
 |--------|---------|
-| `import-all-stories-to-railway.js` | Import all 5 stories (recommended) |
+| `import-all-stories-to-railway.js` | Import all 6 stories (recommended) |
 | `import-stories.ps1` | PowerShell batch import |
 | `import-story.js` | Import individual story |
 | `fix-story-titles.js` | Fix corrupted titles |
@@ -189,5 +194,5 @@ node scripts/query-db.js "SELECT NOW()"
 1. **Always use `--replace` flag** when re-importing to avoid duplicates
 2. **Verify titles** after each import using `list-stories.js`
 3. **Test locally first** before deploying to production
-4. Keep story files (`story1.txt` - `story5.txt`) as the source of truth for titles
+4. Keep story files (`story1.txt` - `story6.txt`) as the source of truth for titles
 5. The first sentence of each story file **is the title**
