@@ -49,6 +49,34 @@
             font-size: 14px;
         }
 
+        .approve-all-btn {
+            padding: 8px 16px;
+            background: #16a34a;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: none; /* shown only when rows are checked */
+        }
+
+        .approve-all-btn:hover {
+            background: #15803d;
+        }
+
+        .approve-all-btn:disabled {
+            background: #86efac;
+            cursor: not-allowed;
+        }
+
+        .select-count {
+            font-size: 13px;
+            color: #475569;
+            display: none;
+        }
+
         .recordings-table {
             width: 100%;
             background: white;
@@ -262,10 +290,13 @@
             <label for="filterStatus">Filter:</label>
             <select id="filterStatus">
                 <option value="all">All Recordings</option>
+                <option value="pending">Pending (Not Yet Approved)</option>
                 <option value="rejected">Rejected Only</option>
                 <option value="good">Good Quality Only</option>
                 <option value="deleted">Marked for Deletion</option>
             </select>
+            <span class="select-count" id="selectCount"></span>
+            <button class="approve-all-btn" id="approveAllBtn" onclick="approveSelected()">✓ Approve Selected</button>
         </div>
 
         <div class="scroll-hint" id="scrollHint" style="display: none;">
@@ -276,6 +307,9 @@
             <table>
                 <thead>
                     <tr>
+                        <th style="width: 36px; text-align: center;">
+                            <input type="checkbox" id="selectAllCheckbox" title="Select all" onchange="toggleSelectAll(this.checked)">
+                        </th>
                         <th style="width: 80px;">Recording #</th>
                         <th style="width: 150px;">User</th>
                         <th style="width: 180px;">Story Title</th>
@@ -286,7 +320,7 @@
                 </thead>
                 <tbody id="recordingsTableBody">
                     <tr>
-                        <td colspan="6" class="loading">Loading recordings...</td>
+                        <td colspan="7" class="loading">Loading recordings...</td>
                     </tr>
                 </tbody>
             </table>
@@ -416,7 +450,7 @@
                 console.error('Error loading recordings:', error);
                 document.getElementById('recordingsTableBody').innerHTML = `
                     <tr>
-                        <td colspan="5" class="no-recordings">
+                        <td colspan="7" class="no-recordings">
                             Error loading recordings. Please try again later.
                         </td>
                     </tr>
@@ -436,15 +470,22 @@
 
         function renderRecordings() {
             const filterStatus = document.getElementById('filterStatus').value;
-            
+
             let filteredRecordings = allRecordings;
-            if (filterStatus === 'rejected') {
+            if (filterStatus === 'pending') {
+                filteredRecordings = allRecordings.filter(r => r.status === 'pending');
+            } else if (filterStatus === 'rejected') {
                 filteredRecordings = allRecordings.filter(r => r.status === 'rejected');
             } else if (filterStatus === 'good') {
                 filteredRecordings = allRecordings.filter(r => r.status === 'approved');
             } else if (filterStatus === 'deleted') {
                 filteredRecordings = allRecordings.filter(r => r.status === 'deleted');
             }
+
+            // Reset select-all checkbox and selection UI
+            const selectAll = document.getElementById('selectAllCheckbox');
+            if (selectAll) selectAll.checked = false;
+            updateSelectUI();
 
             checkIfScrollable();
 
@@ -453,9 +494,9 @@
             if (filteredRecordings.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="6" class="no-recordings">
-                            ${allRecordings.length === 0 
-                                ? 'No recordings found. Start recording to see them here!' 
+                        <td colspan="7" class="no-recordings">
+                            ${allRecordings.length === 0
+                                ? 'No recordings found. Start recording to see them here!'
                                 : 'No recordings match the current filter.'}
                         </td>
                     </tr>
@@ -463,8 +504,11 @@
                 return;
             }
 
-            tbody.innerHTML = filteredRecordings.map((recording, index) => `
+            tbody.innerHTML = filteredRecordings.map((recording) => `
                 <tr>
+                    <td style="text-align: center;">
+                        <input type="checkbox" class="row-checkbox" data-id="${recording.id}" onchange="updateSelectUI()">
+                    </td>
                     <td>${recording.id}</td>
                     <td>${maskEmail(recording.user_id)}</td>
                     <td>
@@ -474,8 +518,8 @@
                         <div class="sentence-text">${recording.sentence_text}</div>
                     </td>
                     <td>
-                        <button 
-                            class="play-btn" 
+                        <button
+                            class="play-btn"
                             data-recording-id="${recording.id}"
                             onclick="playAudio(${recording.id})"
                             style="padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
@@ -484,7 +528,7 @@
                         <span id="status-${recording.id}" style="margin-left: 10px; font-size: 12px; color: #64748b;"></span>
                     </td>
                     <td>
-                        <select 
+                        <select
                             class="flag-dropdown ${recording.status === 'rejected' ? 'needs-rerecording' : recording.status === 'deleted' ? 'deleted' : 'good'}"
                             data-recording-id="${recording.id}"
                             onchange="updateFlag(${recording.id}, this.value)">
@@ -556,6 +600,73 @@
                 } else {
                     hint.style.display = 'none';
                 }
+            }
+        }
+
+        function updateSelectUI() {
+            const checkboxes = document.querySelectorAll('.row-checkbox');
+            const checked = document.querySelectorAll('.row-checkbox:checked');
+            const countEl = document.getElementById('selectCount');
+            const approveBtn = document.getElementById('approveAllBtn');
+            const selectAll = document.getElementById('selectAllCheckbox');
+
+            if (checked.length > 0) {
+                countEl.textContent = `${checked.length} selected`;
+                countEl.style.display = 'inline';
+                approveBtn.style.display = 'inline-block';
+            } else {
+                countEl.style.display = 'none';
+                approveBtn.style.display = 'none';
+            }
+
+            // Sync the select-all checkbox state
+            if (checkboxes.length > 0) {
+                selectAll.checked = checked.length === checkboxes.length;
+                selectAll.indeterminate = checked.length > 0 && checked.length < checkboxes.length;
+            }
+        }
+
+        function toggleSelectAll(checked) {
+            document.querySelectorAll('.row-checkbox').forEach(cb => { cb.checked = checked; });
+            updateSelectUI();
+        }
+
+        async function approveSelected() {
+            const checked = document.querySelectorAll('.row-checkbox:checked');
+            if (checked.length === 0) return;
+
+            const btn = document.getElementById('approveAllBtn');
+            btn.disabled = true;
+            btn.textContent = `Approving…`;
+
+            const ids = Array.from(checked).map(cb => Number(cb.dataset.id));
+            let successCount = 0;
+
+            for (const id of ids) {
+                try {
+                    const response = await fetch(`/api/recordings/${id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: 'approved' })
+                    });
+                    if (response.ok) {
+                        const recording = allRecordings.find(r => r.id === id);
+                        if (recording) recording.status = 'approved';
+                        successCount++;
+                    }
+                } catch (e) {
+                    console.error(`Failed to approve recording ${id}:`, e);
+                }
+            }
+
+            btn.disabled = false;
+            btn.textContent = '✓ Approve Selected';
+
+            updateStats();
+            renderRecordings();
+
+            if (successCount < ids.length) {
+                alert(`Approved ${successCount} of ${ids.length} recordings. Some updates failed.`);
             }
         }
 
